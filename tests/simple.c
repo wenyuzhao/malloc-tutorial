@@ -2,7 +2,9 @@
 #include <stdlib.h>
 
 int main() {
-  printf("Hello, world!\n");
-  printf("Alloc: %p\n", malloc(123));
+  void* ptr = malloc(123);
+  printf("Allocate: %p\n", ptr);
+  free(ptr);
+  printf("%p is freed\n", ptr);
   return 0;
 }

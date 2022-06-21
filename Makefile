@@ -11,7 +11,7 @@ tests/%: tests/%.c
 ALL_TESTS = tests/simple
 
 test: $(TARGET) $(ALL_TESTS)
-	@for test in $(ALL_TESTS); do             \
-		echo "LD_PRELOAD=$(TARGET) $$test";   \
-		LD_PRELOAD=$(TARGET) $$test;          \
+	@for test in $(ALL_TESTS); do               \
+		echo "LD_PRELOAD=./$(TARGET) $$test";   \
+		LD_PRELOAD=./$(TARGET) $$test;          \
 	done
