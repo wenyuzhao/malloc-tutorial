@@ -1,9 +1,20 @@
 CC      = clang
-CFLAGS  = -I. -fPIC -Wall -Wextra -Werror -std=c11 -pedantic -g -ggdb3
-TARGET  = mymalloc.so
+CFLAGS  = -I. -fPIC -Wall -Wextra -Werror -std=c11 -pedantic
+MALLOC  = mymalloc
+TARGET = $(MALLOC).so
 
-$(TARGET): mymalloc.o
-	$(CC) -o $(TARGET) $^ -shared
+ifdef RELEASE
+CFLAGS += -O3
+else
+CFLAGS += -DDEBUG -g -ggdb3
+endif
+
+ifdef LOG
+CFLAGS += -DENABLE_LOG
+endif
+
+$(TARGET): *.h
+	$(CC) -o $(TARGET) $(MALLOC).c $(CFLAGS) -shared
 
 tests/%: tests/%.c
 	$(CC) $@.c -o $@
@@ -15,3 +26,13 @@ test: $(TARGET) $(ALL_TESTS)
 		echo "LD_PRELOAD=./$(TARGET) $$test";   \
 		LD_PRELOAD=./$(TARGET) $$test;          \
 	done
+
+clean:
+	rm *.o
+	rm *.so
+	@for test in $(ALL_TESTS); do               \
+		echo "rm $$test";                       \
+		rm $$test;                              \
+	done
+
+.PHONY: clean $(TARGET)
