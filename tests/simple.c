@@ -1,10 +1,12 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include "../mymalloc.h"
 
-int main() {
-  void* ptr = malloc(123);
+int main()
+{
+  void *ptr = my_malloc(123);
   printf("Allocate: %p\n", ptr);
-  free(ptr);
+  my_free(ptr);
   printf("%p is freed\n", ptr);
   return 0;
 }
