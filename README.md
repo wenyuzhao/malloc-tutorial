@@ -18,7 +18,7 @@ Specify `RELEASE=1` (`make test MALLOC=mymalloc RELEASE=1`) will compile everyth
 
 - [ ] More tests (maybe https://github.com/ramankahlon/CS252/tree/master/lab1-src/tests/testsrc ?)
 - [x] DLMalloc with single list, block coalescing, and fence posting
-- [ ] Optimization: Constant time coalescing
+- [x] Optimization: Constant time coalescing
 - [ ] Optimization: Segregated Free List
 - [ ] Optimization: Reduce metadata footprint
 - [ ] Optimization: Coalescing chunks from the OS
