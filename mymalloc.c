@@ -21,16 +21,45 @@ static const size_t kFenceValue = 0xdeadbeef;
 static Block *free_head = NULL;
 static size_t allocated = 0;
 
+/// Round up size
 inline static size_t size_align_up(size_t size, size_t alignment)
 {
   const size_t mask = alignment - 1;
   return (size + mask) & ~mask;
 }
 
-static Block *request_more_memory(size_t alloc_size)
+/// Add block to the freelist
+static void add_block(Block *block)
+{
+  block->prev = NULL;
+  block->next = free_head;
+  if (free_head != NULL)
+    free_head->prev = block;
+  free_head = block;
+}
+
+/// Remove block from the freelist
+static void remove_block(Block *block)
+{
+  if (block->prev != NULL)
+    block->prev->next = block->next;
+  if (block->next != NULL)
+    block->next->prev = block->prev;
+  if (free_head == block)
+  {
+    free_head = block->next;
+    if (free_head != NULL)
+      free_head->prev = NULL;
+  }
+  block->next = NULL;
+  block->prev = NULL;
+}
+
+/// Acquire more memory from OS
+static Block *acquire_more_memory(size_t alloc_size)
 {
   size_t chunk_size = size_align_up(alloc_size + kBlockMetadataSize + (kFenceSize << 1), kChunkSize);
-  // Request more memory from OS
+  // Acquire more memory from OS
   size_t *ptr = mmap(NULL, chunk_size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, 0, 0);
   assert(ptr != MAP_FAILED);
   // Mark fences
@@ -43,11 +72,7 @@ static Block *request_more_memory(size_t alloc_size)
   block->prev = NULL;
   block->next = NULL;
   // Add block to list
-  block->prev = NULL;
-  block->next = free_head;
-  if (free_head != NULL)
-    free_head->prev = block;
-  free_head = block;
+  add_block(block);
   return block;
 }
 
@@ -66,8 +91,10 @@ void *my_malloc(size_t size)
     }
   }
   if (block == NULL)
-    block = request_more_memory(size);
+    block = acquire_more_memory(size);
   assert(block != NULL);
+  // Remove block from list
+  remove_block(block);
   // Update block metadata
   if (block->size - (kBlockMetadataSize << 1) == size)
   {
@@ -94,23 +121,17 @@ void *my_malloc(size_t size)
   return data;
 }
 
+/// Check if we're touching a fence
 inline static bool is_fence(Block *block)
 {
   return *((size_t *)block) == kFenceValue;
 }
 
+/// Coalesce two neighbour blocks
 static void coalesce_blocks(Block *left, Block *right)
 {
   // Remove right from the list
-  if (right->prev != NULL)
-    right->prev->next = right->next;
-  if (right->next != NULL)
-    right->next->prev = right->prev;
-  if (right == free_head)
-  {
-    free_head = right->next;
-    free_head->prev = NULL;
-  }
+  remove_block(right);
   // Merge left and right
   left->size += right->size;
 }

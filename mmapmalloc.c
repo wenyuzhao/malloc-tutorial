@@ -38,11 +38,14 @@ void *my_malloc(size_t size)
   // Update metadata
   chunk->size = chunk_size;
   // Return data pointer
-  return get_data(chunk);
+  void *data = get_data(chunk);
+  LOG("alloc %p size=%zu\n", data, size);
+  return data;
 }
 
 void my_free(void *ptr)
 {
+  LOG("free %p\n", ptr);
   // Get chunk
   Chunk *chunk = get_chunk(ptr);
   // Unmap memory
