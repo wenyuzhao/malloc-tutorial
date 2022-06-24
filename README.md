@@ -8,7 +8,9 @@ make test MALLOC=mymalloc
 
 Where `MALLOC=?` can be one of the following values:
 * `mmapmalloc` - redirect memory requests to mmap/munmap calls
-* `mymalloc` - DLMalloc with single list, block coalescing, and fence posting
+* `mymalloc` - DLMalloc with single list, coalescing, and fenceposts
+* `mymalloc_coalesce` - DLMalloc with single list, _constant-time_ coalescing, and fenceposts
+* `mymalloc_segregated` - DLMalloc with **segregated** lists, **constant-time** coalescing, and fenceposts (WIP)
 
 Specify `LOG=1` (`make test MALLOC=mymalloc LOG=1`) will enable logging.
 
