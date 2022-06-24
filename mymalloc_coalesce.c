@@ -8,6 +8,7 @@ typedef struct Block
 {
   bool free;
   size_t size;
+  size_t left_size;
   struct Block *prev;
   struct Block *next;
 } Block;
@@ -40,6 +41,7 @@ static Block *request_more_memory(size_t alloc_size)
   Block *block = (Block *)(ptr + 1);
   block->free = true;
   block->size = chunk_size - (kFenceSize << 2);
+  block->left_size = kFenceSize;
   block->prev = NULL;
   block->next = NULL;
   // Add block to list
@@ -82,6 +84,7 @@ void *my_malloc(size_t size)
     first->size = total_size - size - kBlockMetadataSize;
     Block *second = (Block *)(((size_t)block) + first->size);
     second->size = total_size - first->size;
+    second->left_size = first->size;
     second->free = false;
     // Use right block for allocation
     block = second;
@@ -113,6 +116,10 @@ static void coalesce_blocks(Block *left, Block *right)
   }
   // Merge left and right
   left->size += right->size;
+  // Update right.right block
+  Block *right_right = (Block *)(((size_t)right) + right->size);
+  if (!is_fence(right_right))
+    right_right->left_size = left->size;
 }
 
 void my_free(void *ptr)
@@ -127,20 +134,10 @@ void my_free(void *ptr)
     free_head->prev = block;
   free_head = block;
   // Try coalescing
-  // 1. Merge with right neighbour
   Block *right = (Block *)(((size_t)block) + block->size);
   if (!is_fence(right) && right->free)
-  {
     coalesce_blocks(block, right);
-  }
-  // 2. Merge with left neighbour
-  for (Block *b = free_head; b != NULL; b = b->next)
-  {
-    Block *right = (Block *)(((size_t)b) + b->size);
-    if (!is_fence(right) && right->free && right == block)
-    {
-      coalesce_blocks(b, block);
-      break;
-    }
-  }
+  Block *left = (Block *)(((size_t)block) - block->left_size);
+  if (!is_fence(left) && left->free)
+    coalesce_blocks(left, block);
 }
