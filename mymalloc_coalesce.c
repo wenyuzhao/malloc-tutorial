@@ -22,6 +22,18 @@ static const size_t kFenceValue = 0xdeadbeef;
 static Block *free_head = NULL;
 static size_t allocated = 0;
 
+/// Get right neighbour
+inline static Block *get_right_block(Block *block)
+{
+  return (Block *)(((size_t)block) + block->size);
+}
+
+/// Get left neighbour
+inline static Block *get_left_block(Block *block)
+{
+  return (Block *)(((size_t)block) - block->left_size);
+}
+
 /// Round up size
 inline static size_t size_align_up(size_t size, size_t alignment)
 {
@@ -54,6 +66,12 @@ static void remove_block(Block *block)
   }
   block->next = NULL;
   block->prev = NULL;
+}
+
+/// Check if we're touching a fence
+inline static bool is_fence(Block *block)
+{
+  return *((size_t *)block) == kFenceValue;
 }
 
 /// Acquire more memory from OS
@@ -98,7 +116,7 @@ void *my_malloc(size_t size)
   // Remove block from list
   remove_block(block);
   // Update block metadata
-  if (block->size - (kBlockMetadataSize << 1) == size)
+  if (block->size - (kBlockMetadataSize << 1) <= size)
   {
     // Mark block as allocated
     block->free = false;
@@ -108,12 +126,21 @@ void *my_malloc(size_t size)
     // Split block
     size_t total_size = block->size;
     Block *first = block;
+    first->free = true;
     first->size = total_size - size - kBlockMetadataSize;
-    Block *second = (Block *)(((size_t)block) + first->size);
+    Block *second = get_right_block(first);
     second->size = total_size - first->size;
     second->left_size = first->size;
     second->free = false;
+    second->prev = NULL;
+    second->next = NULL;
+    assert(first != second);
+    // Update the right neighbour of the second block
+    Block *right = get_right_block(second);
+    if (!is_fence(right))
+      right->left_size = second->size;
     // Use right block for allocation
+    add_block(first);
     block = second;
   }
   // Update allocation counter
@@ -124,12 +151,6 @@ void *my_malloc(size_t size)
   return data;
 }
 
-/// Check if we're touching a fence
-inline static bool is_fence(Block *block)
-{
-  return *((size_t *)block) == kFenceValue;
-}
-
 /// Coalesce two neighbour blocks
 static void coalesce_blocks(Block *left, Block *right)
 {
@@ -138,7 +159,7 @@ static void coalesce_blocks(Block *left, Block *right)
   // Merge left and right
   left->size += right->size;
   // Update right.right block
-  Block *right_right = (Block *)(((size_t)right) + right->size);
+  Block *right_right = get_right_block(right);
   if (!is_fence(right_right))
     right_right->left_size = left->size;
 }
@@ -147,18 +168,16 @@ void my_free(void *ptr)
 {
   Block *block = (Block *)(((size_t)ptr) - kBlockMetadataSize);
   LOG("free %p size=%zu block=%p\n", ptr, block->size, (void *)block);
-  block->free = false;
+  block->free = true;
   // Add block to freelist
-  block->prev = NULL;
-  block->next = free_head;
-  if (free_head != NULL)
-    free_head->prev = block;
-  free_head = block;
+  add_block(block);
   // Try coalescing
-  Block *right = (Block *)(((size_t)block) + block->size);
+  // 1. Merge with right neighbour
+  Block *right = get_right_block(block);
   if (!is_fence(right) && right->free)
     coalesce_blocks(block, right);
-  Block *left = (Block *)(((size_t)block) - block->left_size);
+  // 2. Merge with left neighbour
+  Block *left = get_left_block(block);
   if (!is_fence(left) && left->free)
     coalesce_blocks(left, block);
 }
