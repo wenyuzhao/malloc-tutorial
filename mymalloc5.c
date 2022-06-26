@@ -26,6 +26,12 @@ static const size_t kFenceValue = 0xdeadbeef;
 
 static Block *lists[N_LISTS + 1];
 
+static void *top = NULL;
+static Block *top_block = NULL;
+
+static void *bottom = NULL;
+static Block *bottom_block = NULL;
+
 inline static size_t max(size_t a, size_t b)
 {
   return a >= b ? a : b;
@@ -124,6 +130,62 @@ static Block *acquire_more_memory(size_t alloc_size)
   block->left_size = kFenceSize;
   block->prev = NULL;
   block->next = NULL;
+  void *end = (void *)(((size_t)ptr) + kChunkSize);
+  // Try merge bottom chunks
+  if (bottom != NULL && bottom == end)
+  {
+    // Merge chunks
+    assert(is_fence(get_left_block(bottom_block)));
+    if (bottom_block->free)
+    {
+      remove_block(bottom_block);
+      block->size = bottom_block->size + kChunkSize;
+      Block *right = get_right_block(bottom_block);
+      right->left_size = block->size;
+    }
+    else
+    {
+      block->size = kChunkSize;
+      bottom_block->left_size = kChunkSize;
+    }
+  }
+  // Update bottom cursor
+  if (bottom == NULL || (size_t)ptr < (size_t)bottom)
+  {
+    bottom = (void *)ptr;
+    bottom_block = block;
+  }
+  // Try merge top chunks
+  if (top != NULL && top == ptr)
+  {
+    // Merge chunks
+    Block *right = get_right_block(top_block);
+    assert(is_fence(right));
+    if (top_block->free)
+    {
+      remove_block(top_block);
+      top_block->free = false;
+      top_block->size += kChunkSize;
+      top_block->prev = NULL;
+      top_block->next = NULL;
+      block = top_block;
+    }
+    else
+    {
+      right->free = false;
+      right->size = kChunkSize;
+      right->left_size = top_block->size;
+      right->prev = NULL;
+      right->next = NULL;
+      block = right;
+    }
+  }
+  // Update top cursor
+  if ((size_t)ptr > (size_t)top)
+  {
+    top = (void *)(((size_t)ptr) + kChunkSize);
+    top_block = block;
+  }
   return block;
 }
 
@@ -148,6 +210,9 @@ static Block *split(Block *block, size_t size)
   Block *right = get_right_block(second);
   if (!is_fence(right))
     right->left_size = second->size;
+  // Update top block
+  if (block == top_block)
+    top_block = second;
   return second;
 }
 
@@ -240,6 +305,9 @@ static void coalesce_blocks(Block *left, Block *right)
     right_right->left_size = left->size;
   // Add left back to list
   add_block(left);
+  // Update top block
+  if (right == top_block)
+    top_block = left;
 }
 
 void my_free(void *ptr)

@@ -8,11 +8,11 @@ make test MALLOC=mymalloc
 
 Where `MALLOC=?` can be one of the following values:
 * `mmapmalloc` - redirect memory requests to mmap/munmap calls
-* `mymalloc` - DLMalloc with single list, coalescing, and fenceposts
-* `mymalloc2` - DLMalloc with single list, _constant-time_ coalescing, and fenceposts
-* `mymalloc3` - DLMalloc with **segregated** lists, **constant-time** coalescing, and fenceposts
-* `mymalloc4` - DLMalloc with **segregated** lists, **constant-time** coalescing, fenceposts, and **metadata footprint reduction**
-* `mymalloc5` - DLMalloc with **segregated** lists, **constant-time** coalescing, fenceposts, **metadata footprint reduction**, and **chunk coalescing** (WIP)
+* `mymalloc`   - DLMalloc with single list, coalescing, and fenceposts
+* `mymalloc2`  - DLMalloc with single list, _constant-time_ coalescing, and fenceposts
+* `mymalloc3`  - DLMalloc with **segregated** lists, **constant-time** coalescing, and fenceposts
+* `mymalloc4`  - DLMalloc with **segregated** lists, **constant-time** coalescing, fenceposts, and **metadata footprint reduction**
+* `mymalloc5`  - DLMalloc with **segregated** lists, **constant-time** coalescing, fenceposts, **metadata footprint reduction**, and **chunk coalescing**
 
 Specify `LOG=1` (`make test MALLOC=mymalloc LOG=1`) will enable logging.
 
@@ -25,4 +25,4 @@ Specify `RELEASE=1` (`make test MALLOC=mymalloc RELEASE=1`) will compile everyth
 - [x] Optimization: Constant time coalescing
 - [x] Optimization: Segregated Free List
 - [x] Optimization: Metadata footprint reduction
-- [ ] Optimization: Coalescing chunks from the OS
+- [x] Optimization: Coalescing chunks from OS
