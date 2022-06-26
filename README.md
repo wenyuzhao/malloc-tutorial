@@ -10,7 +10,7 @@ Where `MALLOC=?` can be one of the following values:
 * `mmapmalloc` - redirect memory requests to mmap/munmap calls
 * `mymalloc` - DLMalloc with single list, coalescing, and fenceposts
 * `mymalloc2` - DLMalloc with single list, _constant-time_ coalescing, and fenceposts
-* `mymalloc3` - DLMalloc with **segregated** lists, **constant-time** coalescing, and fenceposts (WIP)
+* `mymalloc3` - DLMalloc with **segregated** lists, **constant-time** coalescing, and fenceposts
 * `mymalloc4` - DLMalloc with **segregated** lists, **constant-time** coalescing, fenceposts, and **metadata footprint reduction** (WIP)
 * `mymalloc5` - DLMalloc with **segregated** lists, **constant-time** coalescing, fenceposts, **metadata footprint reduction**, and **chunk coalescing** (WIP)
 
@@ -23,6 +23,6 @@ Specify `RELEASE=1` (`make test MALLOC=mymalloc RELEASE=1`) will compile everyth
 - [ ] More tests (maybe https://github.com/ramankahlon/CS252/tree/master/lab1-src/tests/testsrc ?)
 - [x] DLMalloc with single list, block coalescing, and fence posting
 - [x] Optimization: Constant time coalescing
-- [ ] Optimization: Segregated Free List
+- [x] Optimization: Segregated Free List
 - [ ] Optimization: Reduce metadata footprint
 - [ ] Optimization: Coalescing chunks from the OS

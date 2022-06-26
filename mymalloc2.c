@@ -89,14 +89,36 @@ static Block *acquire_more_memory(size_t alloc_size)
   *((size_t *)(((size_t)ptr) + kChunkSize - kFenceSize)) = kFenceValue;
   // Initialize block metadata
   Block *block = (Block *)(ptr + 1);
-  block->free = true;
-  block->size = kChunkSize - (kFenceSize << 2);
+  block->free = false;
+  block->size = kChunkSize - (kFenceSize << 1);
   block->left_size = kFenceSize;
   block->prev = NULL;
   block->next = NULL;
-  // Add block to list
-  add_block(block);
   return block;
+}
+
+/// Split a block into two
+static Block *split(Block *block, size_t size)
+{
+
+  // Split block
+  size_t total_size = block->size;
+  Block *first = block;
+  first->free = true;
+  first->size = total_size - size - kBlockMetadataSize;
+  assert(first->size >= kMinAllocationSize);
+  Block *second = get_right_block(first);
+  second->size = total_size - first->size;
+  second->left_size = first->size;
+  second->free = false;
+  second->prev = NULL;
+  second->next = NULL;
+  assert(first != second);
+  // Update the right neighbour of the second block
+  Block *right = get_right_block(second);
+  if (!is_fence(right))
+    right->left_size = second->size;
+  return second;
 }
 
 void *my_malloc(size_t size)
@@ -112,14 +134,13 @@ void *my_malloc(size_t size)
     if (b->size - kBlockMetadataSize >= size)
     {
       block = b;
+      remove_block(block);
       break;
     }
   }
   if (block == NULL)
     block = acquire_more_memory(size);
   assert(block != NULL);
-  // Remove block from list
-  remove_block(block);
   // Update block metadata
   if (block->size < size + (kBlockMetadataSize << 1) + kMinAllocationSize)
   {
@@ -128,31 +149,17 @@ void *my_malloc(size_t size)
   }
   else
   {
-    // Split block
-    size_t total_size = block->size;
+    Block *second = split(block, size);
     Block *first = block;
-    first->free = true;
-    first->size = total_size - size - kBlockMetadataSize;
-    assert(first->size >= kMinAllocationSize);
-    Block *second = get_right_block(first);
-    second->size = total_size - first->size;
-    second->left_size = first->size;
-    second->free = false;
-    second->prev = NULL;
-    second->next = NULL;
-    assert(first != second);
-    // Update the right neighbour of the second block
-    Block *right = get_right_block(second);
-    if (!is_fence(right))
-      right->left_size = second->size;
-    // Use right block for allocation
     add_block(first);
     block = second;
+    assert(block->size >= size + kBlockMetadataSize);
   }
   // Update allocation counter
   allocated += size;
   // Zero memory and return
   void *data = (void *)(((size_t)block) + kBlockMetadataSize);
+  assert(block->size >= size + kBlockMetadataSize);
   memset(data, 0, size);
   LOG("alloc %p size=%zu block=%p\n", data, size, (void *)block);
   return data;
@@ -161,6 +168,7 @@ void *my_malloc(size_t size)
 /// Coalesce two neighbour blocks
 static void coalesce_blocks(Block *left, Block *right)
 {
+  assert(right == get_right_block(left));
   // Remove right from the list
   remove_block(right);
   // Merge left and right
@@ -176,7 +184,7 @@ void my_free(void *ptr)
   if (ptr == NULL)
     return;
   Block *block = (Block *)(((size_t)ptr) - kBlockMetadataSize);
-  LOG("free %p size=%zu block=%p\n", ptr, block->size, (void *)block);
+  LOG("free %p size=%zu block=%p\n", ptr, block->size - kBlockMetadataSize, (void *)block);
   assert(!block->free);
   block->free = true;
   // Add block to freelist

@@ -12,18 +12,21 @@ ifdef LOG
 CFLAGS += -DENABLE_LOG
 endif
 
-_ALL_TESTS = $(wildcard tests/*.c)
-ALL_TESTS = $(_ALL_TESTS:%.c=%)
+ALL_TESTS_SRC = $(wildcard tests/*.c)
+ALL_TESTS = $(ALL_TESTS_SRC:%.c=%)
+ALL_TESTS_ = $(ALL_TESTS:%=%_)
 
 tests/%: _force *.h tests/%.c $(MALLOC).c
 	@$(CC) $(CFLAGS) $@.c $(MALLOC).c -o $@
-	$@
-
 tests/m32: _force *.h tests/m32.c $(MALLOC).c
 	@$(CC) $(CFLAGS) -m32 $@.c $(MALLOC).c -o $@
-	$@
 
-test: $(ALL_TESTS)
+tests/%_: tests/%
+	$^
+
+test: $(ALL_TESTS_)
+
+.SECONDARY: $(ALL_TESTS)
 
 clean:
 	rm -f *.o

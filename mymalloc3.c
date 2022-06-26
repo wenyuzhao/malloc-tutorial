@@ -9,6 +9,7 @@ typedef struct Block
 {
   bool free;
   size_t size;
+  size_t left_size;
   struct Block *prev;
   struct Block *next;
 } Block;
@@ -21,13 +22,26 @@ static const size_t kAlignment = sizeof(size_t); // Word alignment
 static const size_t kMinAllocationSize = kAlignment;
 static const size_t kFenceValue = 0xdeadbeef;
 
-static Block *free_head = NULL;
-static size_t allocated = 0;
+static Block *lists[N_LISTS + 1];
+
+/// Get size class
+inline static size_t size_class(size_t size)
+{
+  assert(size >= kAlignment);
+  size_t sc = (size / kAlignment) - 1;
+  return sc >= N_LISTS ? N_LISTS : sc;
+}
 
 /// Get right neighbour
 inline static Block *get_right_block(Block *block)
 {
   return (Block *)(((size_t)block) + block->size);
+}
+
+/// Get left neighbour
+inline static Block *get_left_block(Block *block)
+{
+  return (Block *)(((size_t)block) - block->left_size);
 }
 
 /// Round up size
@@ -40,25 +54,29 @@ inline static size_t size_align_up(size_t size, size_t alignment)
 /// Add block to the freelist
 static void add_block(Block *block)
 {
+  assert(block->size > kBlockMetadataSize);
+  size_t sc = size_class(block->size - kBlockMetadataSize);
   block->prev = NULL;
-  block->next = free_head;
-  if (free_head != NULL)
-    free_head->prev = block;
-  free_head = block;
+  block->next = lists[sc];
+  if (lists[sc] != NULL)
+    lists[sc]->prev = block;
+  lists[sc] = block;
 }
 
 /// Remove block from the freelist
 static void remove_block(Block *block)
 {
+  assert(block->size > kBlockMetadataSize);
+  size_t sc = size_class(block->size - kBlockMetadataSize);
   if (block->prev != NULL)
     block->prev->next = block->next;
   if (block->next != NULL)
     block->next->prev = block->prev;
-  if (free_head == block)
+  if (lists[sc] == block)
   {
-    free_head = block->next;
-    if (free_head != NULL)
-      free_head->prev = NULL;
+    lists[sc] = block->next;
+    if (lists[sc] != NULL)
+      lists[sc]->prev = NULL;
   }
   block->next = NULL;
   block->prev = NULL;
@@ -84,6 +102,7 @@ static Block *acquire_more_memory(size_t alloc_size)
   Block *block = (Block *)(ptr + 1);
   block->free = false;
   block->size = kChunkSize - (kFenceSize << 1);
+  block->left_size = kFenceSize;
   block->prev = NULL;
   block->next = NULL;
   return block;
@@ -101,11 +120,72 @@ static Block *split(Block *block, size_t size)
   assert(first->size >= kMinAllocationSize);
   Block *second = get_right_block(first);
   second->size = total_size - first->size;
+  second->left_size = first->size;
   second->free = false;
   second->prev = NULL;
   second->next = NULL;
   assert(first != second);
+  // Update the right neighbour of the second block
+  Block *right = get_right_block(second);
+  if (!is_fence(right))
+    right->left_size = second->size;
   return second;
+}
+
+/// Try allocate from the last general freelist
+static Block *alloc_from_general_list(size_t alloc_size)
+{
+  Block *block = NULL;
+  for (Block *b = lists[N_LISTS]; b != NULL; b = b->next)
+  {
+    if (b->size - kBlockMetadataSize >= alloc_size)
+    {
+      block = b;
+      remove_block(block);
+      break;
+    }
+  }
+  if (block == NULL)
+    block = acquire_more_memory(alloc_size);
+  assert(block != NULL);
+  block->free = false;
+  block->next = NULL;
+  block->prev = NULL;
+  assert(block->size >= alloc_size + kBlockMetadataSize);
+  return block;
+}
+
+/// Allocate from one of the freelists
+static Block *alloc_with_size_class(size_t sc, size_t alloc_size)
+{
+  if (lists[sc] != NULL && sc < N_LISTS)
+  {
+    // Current list is not empty
+    Block *block = lists[sc];
+    lists[sc] = lists[sc]->next;
+    if (lists[sc] != NULL)
+      lists[sc]->prev = NULL;
+    block->free = false;
+    block->next = NULL;
+    block->prev = NULL;
+    assert(block->size >= alloc_size + kBlockMetadataSize);
+    return block;
+  }
+  else
+  {
+    Block *block = sc < N_LISTS ? alloc_with_size_class(sc + 1, alloc_size) : alloc_from_general_list(alloc_size);
+    if (block->size >= alloc_size + (kBlockMetadataSize << 1) + kMinAllocationSize)
+    {
+      Block *second = split(block, alloc_size);
+      Block *first = block;
+      add_block(first);
+      block = second;
+      assert(block->size >= alloc_size + kBlockMetadataSize);
+    }
+    assert(block->size >= alloc_size + kBlockMetadataSize);
+    assert(!block->free);
+    return block;
+  }
 }
 
 void *my_malloc(size_t size)
@@ -114,36 +194,9 @@ void *my_malloc(size_t size)
   size = size_align_up(size, kAlignment);
   if (size == 0 || size > max_allocation_size())
     return NULL;
-  // Find a block
-  Block *block = NULL;
-  for (Block *b = free_head; b != NULL; b = b->next)
-  {
-    if (b->size - kBlockMetadataSize >= size)
-    {
-      block = b;
-      remove_block(block);
-      break;
-    }
-  }
-  if (block == NULL)
-    block = acquire_more_memory(size);
-  assert(block != NULL);
-  // Update block metadata
-  if (block->size < size + (kBlockMetadataSize << 1) + kMinAllocationSize)
-  {
-    // Mark block as allocated
-    block->free = false;
-  }
-  else
-  {
-    Block *second = split(block, size);
-    Block *first = block;
-    add_block(first);
-    block = second;
-    assert(block->size >= size + kBlockMetadataSize);
-  }
-  // Update allocation counter
-  allocated += size;
+  size_t sc = size_class(size);
+  // Try pop a block from list
+  Block *block = alloc_with_size_class(sc, size);
   // Zero memory and return
   void *data = (void *)(((size_t)block) + kBlockMetadataSize);
   assert(block->size >= size + kBlockMetadataSize);
@@ -156,10 +209,18 @@ void *my_malloc(size_t size)
 static void coalesce_blocks(Block *left, Block *right)
 {
   assert(right == get_right_block(left));
+  // Remove left from the list
+  remove_block(left);
   // Remove right from the list
   remove_block(right);
   // Merge left and right
   left->size += right->size;
+  // Update right.right block
+  Block *right_right = get_right_block(right);
+  if (!is_fence(right_right))
+    right_right->left_size = left->size;
+  // Add left back to list
+  add_block(left);
 }
 
 void my_free(void *ptr)
@@ -178,31 +239,31 @@ void my_free(void *ptr)
   if (!is_fence(right) && right->free)
     coalesce_blocks(block, right);
   // 2. Merge with left neighbour
-  for (Block *b = free_head; b != NULL; b = b->next)
-  {
-    Block *right = get_right_block(b);
-    if (!is_fence(right) && right->free && right == block)
-    {
-      coalesce_blocks(b, block);
-      break;
-    }
-  }
+  Block *left = get_left_block(block);
+  if (!is_fence(left) && left->free)
+    coalesce_blocks(left, block);
 }
 
 void verify()
 {
-  for (Block *b = free_head; b != NULL; b = b->next)
+  for (int i = 0; i < N_LISTS + 1; i++)
   {
-    assert(!is_fence(b));
-    assert(b->free);
-    assert(b->size >= kBlockMetadataSize);
-    b->free = false;
-  }
-  for (Block *b = free_head; b != NULL; b = b->next)
-  {
-    assert(!is_fence(b));
-    assert(!b->free);
-    assert(b->size >= kBlockMetadataSize);
-    b->free = true;
+    Block *free_head = lists[i];
+    for (Block *b = free_head; b != NULL; b = b->next)
+    {
+      assert(!is_fence(b));
+      assert(b->free);
+      assert(b->size >= kBlockMetadataSize);
+      assert(b->left_size >= kMinAllocationSize);
+      b->free = false;
+    }
+    for (Block *b = free_head; b != NULL; b = b->next)
+    {
+      assert(!is_fence(b));
+      assert(!b->free);
+      assert(b->size >= kBlockMetadataSize);
+      assert(b->left_size >= kMinAllocationSize);
+      b->free = true;
+    }
   }
 }

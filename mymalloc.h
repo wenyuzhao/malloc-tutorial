@@ -17,6 +17,7 @@
 extern const size_t kChunkSize;
 extern const size_t kBlockMetadataSize;
 extern const size_t kFenceSize;
+// extern const size_t kNumLists;
 
 static inline size_t max_allocation_size()
 {
