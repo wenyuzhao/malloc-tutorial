@@ -44,6 +44,18 @@ inline static size_t size_align_up(size_t size, size_t alignment)
   return (size + mask) & ~mask;
 }
 
+/// Get data pointer of a block
+inline static void *block_to_data(Block *block)
+{
+  return (void *)(((size_t)block) + kBlockMetadataSize);
+}
+
+/// Get the block of the data pointer
+inline static Block *data_to_block(void *ptr)
+{
+  return (Block *)(((size_t)ptr) - kBlockMetadataSize);
+}
+
 /// Add block to the freelist
 static void add_block(Block *block)
 {
@@ -158,7 +170,7 @@ void *my_malloc(size_t size)
   // Update allocation counter
   allocated += size;
   // Zero memory and return
-  void *data = (void *)(((size_t)block) + kBlockMetadataSize);
+  void *data = block_to_data(block);
   assert(block->size >= size + kBlockMetadataSize);
   memset(data, 0, size);
   LOG("alloc %p size=%zu block=%p\n", data, size, (void *)block);
@@ -183,7 +195,7 @@ void my_free(void *ptr)
 {
   if (ptr == NULL)
     return;
-  Block *block = (Block *)(((size_t)ptr) - kBlockMetadataSize);
+  Block *block = data_to_block(ptr);
   LOG("free %p size=%zu block=%p\n", ptr, block->size - kBlockMetadataSize, (void *)block);
   assert(!block->free);
   block->free = true;

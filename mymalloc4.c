@@ -3,18 +3,24 @@
 #include <sys/mman.h>
 #include <stdio.h>
 #include <string.h>
+#include <stddef.h>
 #include "mymalloc.h"
+
+#if __x86_64__
+/* 64-bit */
+#endif
 
 typedef struct Block
 {
-  bool free;
-  size_t size;
-  size_t left_size;
+  size_t size : 32;
+  size_t left_size : 31;
+  size_t free : 1;
   struct Block *prev;
   struct Block *next;
 } Block;
 
 const size_t kBlockMetadataSize = sizeof(Block);
+const size_t kBlockFixedMetadataSize = offsetof(Block, prev);
 const size_t kChunkSize = 1ull << 12; // Size of a page (4 KB)
 const size_t kFenceSize = sizeof(size_t);
 
@@ -23,6 +29,11 @@ static const size_t kMinAllocationSize = kAlignment;
 static const size_t kFenceValue = 0xdeadbeef;
 
 static Block *lists[N_LISTS + 1];
+
+inline static size_t max(size_t a, size_t b)
+{
+  return a >= b ? a : b;
+}
 
 /// Get size class
 inline static size_t size_class(size_t size)
@@ -54,20 +65,20 @@ inline static size_t size_align_up(size_t size, size_t alignment)
 /// Get data pointer of a block
 inline static void *block_to_data(Block *block)
 {
-  return (void *)(((size_t)block) + kBlockMetadataSize);
+  return (void *)(((size_t)block) + kBlockFixedMetadataSize);
 }
 
 /// Get the block of the data pointer
 inline static Block *data_to_block(void *ptr)
 {
-  return (Block *)(((size_t)ptr) - kBlockMetadataSize);
+  return (Block *)(((size_t)ptr) - kBlockFixedMetadataSize);
 }
 
 /// Add block to the freelist
 static void add_block(Block *block)
 {
-  assert(block->size > kBlockMetadataSize);
-  size_t sc = size_class(block->size - kBlockMetadataSize);
+  assert(block->size >= kBlockMetadataSize);
+  size_t sc = size_class(block->size - kBlockFixedMetadataSize);
   block->prev = NULL;
   block->next = lists[sc];
   if (lists[sc] != NULL)
@@ -78,8 +89,8 @@ static void add_block(Block *block)
 /// Remove block from the freelist
 static void remove_block(Block *block)
 {
-  assert(block->size > kBlockMetadataSize);
-  size_t sc = size_class(block->size - kBlockMetadataSize);
+  assert(block->size >= kBlockMetadataSize);
+  size_t sc = size_class(block->size - kBlockFixedMetadataSize);
   if (block->prev != NULL)
     block->prev->next = block->next;
   if (block->next != NULL)
@@ -128,7 +139,7 @@ static Block *split(Block *block, size_t size)
   size_t total_size = block->size;
   Block *first = block;
   first->free = true;
-  first->size = total_size - size - kBlockMetadataSize;
+  first->size = total_size - max(size + kBlockFixedMetadataSize, kBlockMetadataSize);
   assert(first->size >= kMinAllocationSize);
   Block *second = get_right_block(first);
   second->size = total_size - first->size;
@@ -150,7 +161,7 @@ static Block *alloc_from_general_list(size_t alloc_size)
   Block *block = NULL;
   for (Block *b = lists[N_LISTS]; b != NULL; b = b->next)
   {
-    if (b->size - kBlockMetadataSize >= alloc_size)
+    if (b->size - kBlockFixedMetadataSize >= alloc_size)
     {
       block = b;
       remove_block(block);
@@ -163,7 +174,7 @@ static Block *alloc_from_general_list(size_t alloc_size)
   block->free = false;
   block->next = NULL;
   block->prev = NULL;
-  assert(block->size >= alloc_size + kBlockMetadataSize);
+  assert(block->size >= alloc_size + kBlockFixedMetadataSize);
   return block;
 }
 
@@ -180,7 +191,7 @@ static Block *alloc_with_size_class(size_t sc, size_t alloc_size)
     block->free = false;
     block->next = NULL;
     block->prev = NULL;
-    assert(block->size >= alloc_size + kBlockMetadataSize);
+    assert(block->size >= alloc_size + kBlockFixedMetadataSize);
     return block;
   }
   else
@@ -192,9 +203,9 @@ static Block *alloc_with_size_class(size_t sc, size_t alloc_size)
       Block *first = block;
       add_block(first);
       block = second;
-      assert(block->size >= alloc_size + kBlockMetadataSize);
+      assert(block->size >= alloc_size + kBlockFixedMetadataSize);
     }
-    assert(block->size >= alloc_size + kBlockMetadataSize);
+    assert(block->size >= alloc_size + kBlockFixedMetadataSize);
     assert(!block->free);
     return block;
   }
@@ -211,7 +222,7 @@ void *my_malloc(size_t size)
   Block *block = alloc_with_size_class(sc, size);
   // Zero memory and return
   void *data = block_to_data(block);
-  assert(block->size >= size + kBlockMetadataSize);
+  assert(block->size >= size + kBlockFixedMetadataSize);
   memset(data, 0, size);
   LOG("alloc %p size=%zu block=%p\n", data, size, (void *)block);
   return data;
@@ -240,7 +251,7 @@ void my_free(void *ptr)
   if (ptr == NULL)
     return;
   Block *block = data_to_block(ptr);
-  LOG("free %p size=%zu block=%p\n", ptr, block->size - kBlockMetadataSize, (void *)block);
+  LOG("free %p size=%zu block=%p\n", ptr, block->size - kBlockFixedMetadataSize, (void *)block);
   assert(!block->free);
   block->free = true;
   // Add block to freelist

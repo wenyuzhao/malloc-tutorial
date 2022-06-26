@@ -11,7 +11,7 @@ Where `MALLOC=?` can be one of the following values:
 * `mymalloc` - DLMalloc with single list, coalescing, and fenceposts
 * `mymalloc2` - DLMalloc with single list, _constant-time_ coalescing, and fenceposts
 * `mymalloc3` - DLMalloc with **segregated** lists, **constant-time** coalescing, and fenceposts
-* `mymalloc4` - DLMalloc with **segregated** lists, **constant-time** coalescing, fenceposts, and **metadata footprint reduction** (WIP)
+* `mymalloc4` - DLMalloc with **segregated** lists, **constant-time** coalescing, fenceposts, and **metadata footprint reduction**
 * `mymalloc5` - DLMalloc with **segregated** lists, **constant-time** coalescing, fenceposts, **metadata footprint reduction**, and **chunk coalescing** (WIP)
 
 Specify `LOG=1` (`make test MALLOC=mymalloc LOG=1`) will enable logging.
@@ -20,9 +20,9 @@ Specify `RELEASE=1` (`make test MALLOC=mymalloc RELEASE=1`) will compile everyth
 
 # TODO
 
-- [ ] More tests (maybe https://github.com/ramankahlon/CS252/tree/master/lab1-src/tests/testsrc ?)
+- [x] More tests (maybe https://github.com/ramankahlon/CS252/tree/master/lab1-src/tests/testsrc ?)
 - [x] DLMalloc with single list, block coalescing, and fence posting
 - [x] Optimization: Constant time coalescing
 - [x] Optimization: Segregated Free List
-- [ ] Optimization: Reduce metadata footprint
+- [x] Optimization: Metadata footprint reduction
 - [ ] Optimization: Coalescing chunks from the OS
