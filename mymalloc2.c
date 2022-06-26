@@ -2,6 +2,7 @@
 #include <stdbool.h>
 #include <sys/mman.h>
 #include <stdio.h>
+#include <string.h>
 #include "mymalloc.h"
 
 typedef struct Block
@@ -13,10 +14,12 @@ typedef struct Block
   struct Block *next;
 } Block;
 
+const size_t kBlockMetadataSize = sizeof(Block);
+const size_t kChunkSize = 1ull << 12; // Size of a page (4 KB)
+const size_t kFenceSize = sizeof(size_t);
+
 static const size_t kAlignment = sizeof(size_t); // Word alignment
-static const size_t kChunkSize = 1ull << 12;     // Size of a page (4 KB)
-static const size_t kBlockMetadataSize = sizeof(Block);
-static const size_t kFenceSize = sizeof(size_t);
+static const size_t kMinAllocationSize = kAlignment;
 static const size_t kFenceValue = 0xdeadbeef;
 
 static Block *free_head = NULL;
@@ -77,17 +80,17 @@ inline static bool is_fence(Block *block)
 /// Acquire more memory from OS
 static Block *acquire_more_memory(size_t alloc_size)
 {
-  size_t chunk_size = size_align_up(alloc_size + kBlockMetadataSize + (kFenceSize << 1), kChunkSize);
-  // Acquire more memory from OS
-  size_t *ptr = mmap(NULL, chunk_size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, 0, 0);
+  assert(alloc_size + kBlockMetadataSize + (kFenceSize << 1) <= kChunkSize);
+  // Acquire one more chunk from OS
+  size_t *ptr = mmap(NULL, kChunkSize, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, 0, 0);
   assert(ptr != MAP_FAILED);
   // Mark fences
   *ptr = kFenceValue;
-  *((size_t *)(((size_t)ptr) + chunk_size - kFenceSize)) = kFenceValue;
+  *((size_t *)(((size_t)ptr) + kChunkSize - kFenceSize)) = kFenceValue;
   // Initialize block metadata
   Block *block = (Block *)(ptr + 1);
   block->free = true;
-  block->size = chunk_size - (kFenceSize << 2);
+  block->size = kChunkSize - (kFenceSize << 2);
   block->left_size = kFenceSize;
   block->prev = NULL;
   block->next = NULL;
@@ -100,6 +103,8 @@ void *my_malloc(size_t size)
 {
   // Round up allocation size
   size = size_align_up(size, kAlignment);
+  if (size == 0 || size > max_allocation_size())
+    return NULL;
   // Find a block
   Block *block = NULL;
   for (Block *b = free_head; b != NULL; b = b->next)
@@ -116,7 +121,7 @@ void *my_malloc(size_t size)
   // Remove block from list
   remove_block(block);
   // Update block metadata
-  if (block->size - (kBlockMetadataSize << 1) <= size)
+  if (block->size < size + (kBlockMetadataSize << 1) + kMinAllocationSize)
   {
     // Mark block as allocated
     block->free = false;
@@ -128,6 +133,7 @@ void *my_malloc(size_t size)
     Block *first = block;
     first->free = true;
     first->size = total_size - size - kBlockMetadataSize;
+    assert(first->size >= kMinAllocationSize);
     Block *second = get_right_block(first);
     second->size = total_size - first->size;
     second->left_size = first->size;
@@ -145,8 +151,9 @@ void *my_malloc(size_t size)
   }
   // Update allocation counter
   allocated += size;
-  // Return
+  // Zero memory and return
   void *data = (void *)(((size_t)block) + kBlockMetadataSize);
+  memset(data, 0, size);
   LOG("alloc %p size=%zu block=%p\n", data, size, (void *)block);
   return data;
 }
@@ -166,8 +173,11 @@ static void coalesce_blocks(Block *left, Block *right)
 
 void my_free(void *ptr)
 {
+  if (ptr == NULL)
+    return;
   Block *block = (Block *)(((size_t)ptr) - kBlockMetadataSize);
   LOG("free %p size=%zu block=%p\n", ptr, block->size, (void *)block);
+  assert(!block->free);
   block->free = true;
   // Add block to freelist
   add_block(block);

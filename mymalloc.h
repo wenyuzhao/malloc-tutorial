@@ -12,6 +12,17 @@
 #define LOG(...)
 #endif
 
+#define N_LISTS 59
+
+extern const size_t kChunkSize;
+extern const size_t kBlockMetadataSize;
+extern const size_t kFenceSize;
+
+static inline size_t max_allocation_size()
+{
+    return kChunkSize - kBlockMetadataSize - (kFenceSize << 1);
+}
+
 void *my_malloc(size_t size);
 // void *my_calloc(size_t nmemb, size_t size);
 // void *my_realloc(void *ptr, size_t size);
