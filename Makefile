@@ -50,4 +50,4 @@ clean:
 
 _force:
 
-.PHONY: clean _force all mymalloc
+.PHONY: clean _force all mymalloc mymalloc32

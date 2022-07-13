@@ -57,7 +57,8 @@ def make(cmd: str, path: Path) -> tuple[bytes, SubprocessExit]:
     except subprocess.CalledProcessError as e:
         return e.stdout, SubprocessExit.Error
     except subprocess.TimeoutExpired as e:
-        return b"Timeout", SubprocessExit.Timeout
+        out = f"Timed out after {TIMEOUT}s"
+        return bytes(out, "UTF-8"), SubprocessExit.Timeout
 
 
 def run_tests(path: Path):
@@ -82,13 +83,13 @@ def run_test(test: str, path: Path) -> tuple[bytes, SubprocessExit]:
             )
         return p.stdout, SubprocessExit.Normal
     except subprocess.CalledProcessError as e:
-        tmp = bytearray(e.stdout)
-        tmp.extend(bytes(f"{signal.strsignal(-e.returncode)}", "UTF-8"))
-
-        e.stdout = bytes(tmp)
+        signo = bytearray(e.stdout)
+        signo.extend(bytes(f"{signal.strsignal(-e.returncode)}", "UTF-8"))
+        e.stdout = bytes(signo)
         return e.stdout, SubprocessExit.Error
     except subprocess.TimeoutExpired as e:
-        return b"Timeout", SubprocessExit.Timeout
+        out = f"Timed out after {TIMEOUT}s"
+        return bytes(out, "UTF-8"), SubprocessExit.Timeout
 
 
 def check_make(cmd: str, output: bytes, exit_code: SubprocessExit):
@@ -97,11 +98,11 @@ def check_make(cmd: str, output: bytes, exit_code: SubprocessExit):
     elif exit_code == SubprocessExit.Error:
         make_cmd = format(f"make {cmd}").strip()
         print(f"{bcolors.FAIL}FAIL{bcolors.ENDC}", flush=True)
-        raise Exception(f"{bcolors.FAIL}{make_cmd} failed: {output.decode('UTF-8')}{bcolors.ENDC}")
+        raise Exception(f"{bcolors.FAIL}{make_cmd} failed{bcolors.ENDC}: {output.decode('UTF-8')}")
     else:
         make_cmd = format(f"make {cmd}").strip()
         print(f"{bcolors.WARNING}TIMEOUT{bcolors.ENDC}", flush=True)
-        raise Exception(f"{bcolors.WARNING}{make_cmd} timedout: {output.decode('UTF-8')}{bcolors.ENDC}")
+        raise Exception(f"{bcolors.WARNING}{make_cmd} timedout{bcolors.ENDC}: {output.decode('UTF-8')}")
 
 
 def check_test(test: str, output: bytes, exit_code: SubprocessExit, path: Path):
@@ -164,7 +165,7 @@ def main():
     if FAILED:
         print(f"{bcolors.OKBLUE}list of failed tests: {bcolors.WARNING}{bcolors.BOLD}{[get_test_name(fail['test']) for fail in FAILED]}{bcolors.ENDC}")
         for fail in FAILED:
-            print(f"{bcolors.WARNING}{get_test_name(fail['test'])}: {bcolors.FAIL}{fail['output']}{bcolors.ENDC}")
+            print(f"{bcolors.WARNING}{get_test_name(fail['test'])}: {bcolors.ENDC}\n{fail['output']}")
 
 
 class bcolors:
