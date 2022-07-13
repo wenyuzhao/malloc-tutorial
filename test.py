@@ -42,7 +42,7 @@ def make(cmd: str, path: Path) -> tuple[bytes, SubprocessExit]:
         if cmd == "":
             make_cmd = ["make"]
         else:
-            make_cmd = ["make", cmd]
+            make_cmd = make_cmd.split(" ")
 
         p = subprocess.run(
                 make_cmd,
@@ -142,14 +142,14 @@ def main():
     check_make(build_cmd, output, exit_code)
 
     if args.test:
-        output, exit_code = make(f"tests/{args.test}", script_path)
+        output, exit_code = make(f"tests/{args.test} " + build_cmd, script_path)
         check_make(f"tests/{args.test}", output, exit_code)
 
         test_path = script_path / "tests" / args.test
         output, exit_code = run_test(test_path, script_path)
         check_test(test_path, output, exit_code, script_path / "tests")
     else:
-        output, exit_code = make("test", script_path)
+        output, exit_code = make("test " + build_cmd, script_path)
         check_make("test", output, exit_code)
 
         run_tests(script_path / "tests")
