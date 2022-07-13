@@ -9,8 +9,8 @@ typedef struct
   size_t size;
 } Chunk;
 
+const size_t kChunkSize = 1ull << 12;               // Size of a page (4 KB)
 static const size_t kMetadataSize = sizeof(size_t); // Allocation size metadata
-static const size_t kChunkSize = 1ull << 12;        // Size of a page (4 KB)
 
 inline static Chunk *get_chunk(void *ptr)
 {
@@ -51,3 +51,5 @@ void my_free(void *ptr)
   // Unmap memory
   munmap(chunk, chunk->size);
 }
+
+void verify() {}
