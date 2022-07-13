@@ -26,6 +26,8 @@ class SubprocessExit(Enum):
 
 def setup_parser(parser: ArgumentParser()):
     parser.add_argument("-t", "--test", help="test name to run", type=str)
+    parser.add_argument("--release", help="build in release mode", action="store_true")
+    parser.add_argument("--log", help="build with logging", action="store_true")
 
 
 def get_test_name(test: str) -> str:
@@ -130,8 +132,14 @@ def main():
     output, exit_code = make("clean", script_path)
     check_make("clean", output, exit_code)
 
-    output, exit_code = make("", script_path)
-    check_make("", output, exit_code)
+    build_cmd = ""
+    if args.release:
+        build_cmd += "RELEASE=1 "
+    if args.log:
+        build_cmd += "LOG=1 "
+
+    output, exit_code = make(build_cmd, script_path)
+    check_make(build_cmd, output, exit_code)
 
     if args.test:
         output, exit_code = make(f"tests/{args.test}", script_path)
@@ -153,9 +161,8 @@ def main():
             f"{bcolors.OKBLUE}{failed}/{TOTAL_RUNS} tests {bcolors.FAIL}failed{bcolors.ENDC}; "      \
             f"{bcolors.OKBLUE}{timedout}/{TOTAL_RUNS} tests {bcolors.WARNING}timedout{bcolors.ENDC}")
 
-    print(f"{bcolors.OKBLUE}list of failed tests: {bcolors.WARNING}{bcolors.BOLD}{[get_test_name(fail['test']) for fail in FAILED]}{bcolors.ENDC}")
-
     if FAILED:
+        print(f"{bcolors.OKBLUE}list of failed tests: {bcolors.WARNING}{bcolors.BOLD}{[get_test_name(fail['test']) for fail in FAILED]}{bcolors.ENDC}")
         for fail in FAILED:
             print(f"{bcolors.WARNING}{get_test_name(fail['test'])}: {bcolors.FAIL}{fail['output']}{bcolors.ENDC}")
 
