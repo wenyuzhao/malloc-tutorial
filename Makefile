@@ -14,7 +14,6 @@ endif
 
 ALL_TESTS_SRC = $(wildcard tests/*.c)
 ALL_TESTS = $(ALL_TESTS_SRC:%.c=%)
-ALL_TESTS_ = $(ALL_TESTS:%=%_)
 
 tests/%: _force *.h tests/%.c $(MALLOC).c
 	@$(CC) $(CFLAGS) $@.c $(MALLOC).c -o $@
@@ -24,16 +23,14 @@ tests/m32: _force *.h tests/m32.c $(MALLOC).c
 tests/%_: tests/%
 	$^
 
-test: $(ALL_TESTS_)
-
-.SECONDARY: $(ALL_TESTS)
+test: $(ALL_TESTS)
 
 clean:
 	rm -f *.o
 	rm -f *.so
-	@for test in $(ALL_TESTS); do    \
+	@for test in $(ALL_TESTS); do        \
 		echo "rm $$test";            \
-		rm -f $$test;                \
+		rm -f $$test;      	     \
 	done
 
 _force:
