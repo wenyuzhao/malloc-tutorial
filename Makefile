@@ -1,6 +1,9 @@
-CC      = clang
-CFLAGS  = -fPIC -Wall -Wextra -Werror -std=gnu17 -pedantic
-MALLOC  = mymalloc
+CC       = clang
+CFLAGS   = -fPIC -Wall -Wextra -Werror -std=gnu17 -pedantic
+LIBFLAGS = -shared
+MALLOC   = mymalloc
+ODIR	 = ./out
+LIBTESTFLAGS = -L./out
 
 ifdef RELEASE
 CFLAGS += -O3
@@ -14,28 +17,37 @@ endif
 
 ALL_TESTS_SRC = $(wildcard tests/*.c)
 ALL_TESTS = $(ALL_TESTS_SRC:%.c=%)
-ALL_TESTS_ = $(ALL_TESTS:%=%_)
 
-tests/%: _force *.h tests/%.c $(MALLOC).c
-	@$(CC) $(CFLAGS) $@.c $(MALLOC).c -o $@
-tests/m32: _force *.h tests/m32.c $(MALLOC).c
-	@$(CC) $(CFLAGS) -m32 $@.c $(MALLOC).c -o $@
+all: mymalloc
+
+mymalloc: $(MALLOC).c | $(ODIR)/
+	@$(CC) $(CFLAGS) $(LIBFLAGS) -o $(ODIR)/lib$(MALLOC).so $<
+
+mymalloc32: $(MALLOC).c | $(ODIR)/
+	@$(CC) $(CFLAGS) $(LIBFLAGS) -m32 -o $(ODIR)/lib$(MALLOC)32.so $<
+
+tests/%: _force *.h tests/%.c | mymalloc
+	@$(CC) $(CFLAGS) $(LIBTESTFLAGS) $@.c -l$(MALLOC) -o $@ -Wl,-rpath=`pwd`/$(ODIR)
+
+tests/m32: _force *.h tests/m32.c | mymalloc32
+	@$(CC) $(CFLAGS) $(LIBTESTFLAGS) -m32 $@.c -l$(MALLOC)32 -o $@ -Wl,-rpath=`pwd`/$(ODIR)
 
 tests/%_: tests/%
 	$^
 
-test: $(ALL_TESTS_)
+test: $(ALL_TESTS)
 
-.SECONDARY: $(ALL_TESTS)
+$(ODIR)/:
+	mkdir -p $(ODIR)
 
 clean:
-	rm -f *.o
-	rm -f *.so
-	@for test in $(ALL_TESTS); do    \
+	rm -f *.o $(ODIR)/*.o
+	rm -f *.so $(ODIR)/*.so
+	@for test in $(ALL_TESTS); do        \
 		echo "rm $$test";            \
-		rm -f $$test;                \
+		rm -f $$test;      	     \
 	done
 
 _force:
 
-.PHONY: clean _force
+.PHONY: clean _force all mymalloc mymalloc32
