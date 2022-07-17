@@ -55,6 +55,7 @@ $(ODIR)/:
 
 clean:
 	rm -rf ./out
+	rm -rf ./tests/*.dSYM
 	rm -f *.o $(ODIR)/*.o
 	rm -f *.$(DYLIB_EXT) $(ODIR)/*.$(DYLIB_EXT)
 	@for test in $(ALL_TESTS); do        \
