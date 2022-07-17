@@ -14,15 +14,7 @@
 
 #define N_LISTS 59
 
-extern const size_t kChunkSize;
-extern const size_t kBlockMetadataSize;
-extern const size_t kFenceSize;
-// extern const size_t kNumLists;
-
-static inline size_t max_allocation_size()
-{
-    return kChunkSize - kBlockMetadataSize - (kFenceSize << 1);
-}
+extern const size_t kMaxAllocationSize;
 
 void *my_malloc(size_t size);
 void my_free(void *p);

@@ -2,5 +2,5 @@
 
 int main()
 {
-    mallocing(max_allocation_size());
+    mallocing(kMaxAllocationSize);
 }
