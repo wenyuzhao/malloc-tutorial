@@ -2,8 +2,8 @@ CC       = clang
 CFLAGS   = -fPIC -Wall -Wextra -Werror -std=gnu17 -pedantic
 LIBFLAGS = -shared
 MALLOC   = mymalloc
-ODIR	 = $(abspath ./out)
-LIBTESTFLAGS = -L$(ODIR)
+ODIR	 = ./out
+LIBTESTFLAGS = -L./out
 
 ifdef RELEASE
 CFLAGS += -O3
