@@ -61,15 +61,15 @@ def make(cmd: str, path: Path) -> tuple[bytes, SubprocessExit]:
         return bytes(out, "UTF-8"), SubprocessExit.Timeout
 
 
-def run_tests(path: Path):
-    for file in os.listdir(path):
-        file = path / file
+def run_tests(tests_path: Path, script_path: Path):
+    for file in os.listdir(tests_path):
+        file = tests_path / file
         if os.path.isfile(file) and os.access(file, os.X_OK):
-            output, exit_code = run_test(file, path)
-            check_test(file, output, exit_code, path)
+            output, exit_code = run_test(file, script_path)
+            check_test(file, output, exit_code, script_path)
 
 
-def run_test(test: str, path: Path) -> tuple[bytes, SubprocessExit]:
+def run_test(test: str, script_path: Path) -> tuple[bytes, SubprocessExit]:
     try:
         print(f"{bcolors.OKCYAN}Running {bcolors.BOLD}{get_test_name(test)} {bcolors.ENDC}", end='', flush=True)
         p = subprocess.run(
@@ -79,7 +79,7 @@ def run_test(test: str, path: Path) -> tuple[bytes, SubprocessExit]:
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 timeout=TIMEOUT,
-                cwd=path
+                cwd=script_path
             )
         return p.stdout, SubprocessExit.Normal
     except subprocess.CalledProcessError as e:
@@ -153,7 +153,7 @@ def main():
         output, exit_code = make("test " + build_cmd, script_path)
         check_make("test", output, exit_code)
 
-        run_tests(script_path / "tests")
+        run_tests(script_path / "tests", script_path)
 
     failed = TOTAL_FAILS
     timedout = TOTAL_TIMEOUTS
