@@ -48,7 +48,7 @@ endif
 tests/%_: tests/%
 	$^
 
-test: $(ALL_TESTS)
+test: $(ALL_TESTS_SRC:%.c=%_)
 
 $(ODIR)/:
 	mkdir -p $(ODIR)

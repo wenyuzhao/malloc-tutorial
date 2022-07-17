@@ -15,8 +15,9 @@ typedef struct Block
 } Block;
 
 const size_t kBlockMetadataSize = sizeof(Block);
-const size_t kChunkSize = 1ull << 12; // Size of a page (4 KB)
+const size_t kChunkSize = 16ull << 20; // 16MB mmap chunk
 const size_t kFenceSize = sizeof(size_t);
+const size_t kMaxAllocationSize = kChunkSize - kBlockMetadataSize - (kFenceSize << 1); // We support allocation up to ~16MB
 
 static const size_t kAlignment = sizeof(size_t); // Word alignment
 static const size_t kMinAllocationSize = kAlignment;
@@ -45,7 +46,7 @@ inline static Block *get_left_block(Block *block)
 }
 
 /// Round up size
-inline static size_t size_align_up(size_t size, size_t alignment)
+inline static size_t round_up(size_t size, size_t alignment)
 {
   const size_t mask = alignment - 1;
   return (size + mask) & ~mask;
@@ -203,8 +204,8 @@ static Block *alloc_with_size_class(size_t sc, size_t alloc_size)
 void *my_malloc(size_t size)
 {
   // Round up allocation size
-  size = size_align_up(size, kAlignment);
-  if (size == 0 || size > max_allocation_size())
+  size = round_up(size, kAlignment);
+  if (size == 0 || size > kMaxAllocationSize)
     return NULL;
   size_t sc = size_class(size);
   // Try pop a block from list

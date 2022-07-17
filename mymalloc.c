@@ -14,7 +14,7 @@ typedef struct Block
 } Block;
 
 const size_t kBlockMetadataSize = sizeof(Block);
-const size_t kChunkSize = 16ull << 20; // Size of a page (4 KB)
+const size_t kChunkSize = 16ull << 20; // 16MB mmap chunk
 const size_t kFenceSize = sizeof(size_t);
 const size_t kMaxAllocationSize = kChunkSize - kBlockMetadataSize - (kFenceSize << 1);
 
