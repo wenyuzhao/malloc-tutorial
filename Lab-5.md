@@ -206,5 +206,11 @@ After finishing `my_malloc` and `my_free`, please use the testing script to run 
 $ ./test.py
 ```
 
-You can also run a single test by running: `./test.py -t all_lists`.
+**_Other usages:_**
+
+* Run a single test: `./test.py -t all_lists`.
+* Run tests with release build:  `./test.py --release`.
+* Enable logging:  `./test.py --log`.
+  * Please use `LOG("Hello %s\n", "world");` for logging in your source code.
+* If your source file is called *different_malloc.c* instead of _mymalloc.c_: `./test.py -m different_malloc`.
 

@@ -2,11 +2,13 @@
 
 import argparse
 from argparse import ArgumentParser
+from email.policy import default
 from enum import Enum
 import os
 from pathlib import Path
 import signal
 import subprocess
+from typing import Optional
 
 # 2 min timeout
 TIMEOUT = 120
@@ -28,6 +30,7 @@ def setup_parser(parser: ArgumentParser()):
     parser.add_argument("-t", "--test", help="test name to run", type=str)
     parser.add_argument("--release", help="build in release mode", action="store_true")
     parser.add_argument("--log", help="build with logging", action="store_true")
+    parser.add_argument("-m", "--malloc", type=str, help="allocator name, default to \"mymalloc\"")
 
 
 def get_test_name(test: str) -> str:
@@ -133,7 +136,7 @@ def main():
     output, exit_code = make("clean", script_path)
     check_make("clean", output, exit_code)
 
-    build_cmd = ""
+    build_cmd = f"MALLOC={args.malloc}" if args.malloc is not None else ""
     if args.release:
         build_cmd += "RELEASE=1 "
     if args.log:
