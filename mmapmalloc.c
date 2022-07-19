@@ -25,7 +25,9 @@ void *my_malloc(size_t size) {
   size = round_up(size + kMetadataSize, kPageSize);
   // Request memory from OS
   Chunk *chunk = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, 0, 0);
-  assert(chunk != MAP_FAILED);
+  if (chunk == MAP_FAILED) {
+    return NULL;
+  }
   // Record allocation size
   chunk->size = size;
   // Return data pointer

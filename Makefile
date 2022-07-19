@@ -1,5 +1,6 @@
 CC       = clang
-CFLAGS   = -fPIC -Wall -Wextra -Werror -std=gnu17 -pedantic
+# https://developers.redhat.com/blog/2018/03/21/compiler-and-linker-flags-gcc
+CFLAGS   = -fPIC -Wall -Wextra -Werror=format-security -Werror=implicit-function-declaration -std=gnu17 -pedantic
 LIBFLAGS = -shared
 MALLOC   = mymalloc
 ODIR	 = ./out

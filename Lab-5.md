@@ -4,23 +4,30 @@
 
 # 0. Introduction
 
-In this lab you will build a malloc implementation from scratch. We will start from building a most simple allocator, the mmap allocator, which simply indirects all the alloc and free requests to `mmap` and `munmap` calls. Based on the mmap allocator, we will then build a simple single freelist allocator that manages the memory ourselves.
+In this lab you will build a malloc implementation from scratch. We will start from building a very simple allocator, the mmap allocator, which simply indirects all the allocation and deallocation requests to `mmap` and `munmap` calls. Based on the mmap allocator, we will then build a simple single freelist allocator that manages the memory ourselves.
 
-The header file _mymalloc.h_ in the repo provides the signature of the malloc and free functions. Please note here we renamed them to `my_malloc` and `my_free`, because extra difficulties would be involved if debugging a library with overrided `malloc` and `free` implementation.
+The header file _mymalloc.h_ in the repo provides the signature of the malloc and free functions. Please note here we renamed them to `my_malloc` and `my_free`, because extra difficulties would be involved if debugging a library with overridden `malloc` and `free` implementations.
 
 Just like `malloc` / `free`,
   * `void* my_malloc(size_t size)` is called when the user program wants to allocate some memory. The argument is the size (in bytes) of the allocation. The function should return a pointer pointing to the start of the allocated memory. The result start address should be **word aligned (8 bytes on 64-bit machines)**.
   * `void free(void* ptr)` is for releasing a previously allocated memory. The argument is the start address of the allocated memory.
 
+## The `size_t` type
+You may have noticed the `size_t` type being used in the function declaration of `my_malloc`. As you may remember from a previous (**NOTE CHECK THIS IS TRUE**) lab, the sizes of data types in C are often implementation defined. Imagine if an `int` could only store 16-bits of information, then we would not be able to represent the value 100,000 (and more relevantly could not allocate large arrays)! The C specification, hence, describes the `size_t` type in order to represent the size of any object (including arrays). In other words: `size_t` is defined to be "how many bytes it takes to reference any location in memory". Hence, the size of `size_t` is defined to be the same size as the CPU's architecture, with a 32-bit architecture having a `size_t` of 4 bytes (32-bits) and a 64-bit architecture having a `size_t` of 8 bytes (64-bits). The `sizeof()` operator that you have seen being used throughout returns a value of type `size_t`.
+
+The C specification defines another similar type: the `ptrdiff_t` type. This type has the same size as `size_t` but is used to represent the difference between two pointers _of the same types_.
+
+For more information about `size_t` and `ptrdiff_t` you can run `man size_t` or `man ptrdiff_t` in your terminals. Now let's get back to the lab.
+
 In this lab, you will be required to provide your own implementation to these two functions. We provide a set of tests with a testing script to check the correctness of your implementation.
 
-For your development, please use a linux distribution or macOS with `clang` installed.
+For your development, please use a Linux distribution or MacOS with `clang` installed.
 
 **Note:** Please create an empty `mymalloc.c` file in this repo. We will implement the allocators totally in this file.
 
 # 1. A mmap-based allocator
 
-This mmap-based allocator simply indirects the `my_malloc` and `my_free` calls to `mmap` / `munmap`.
+This mmap-based allocator simply directs the `my_malloc` and `my_free` calls to `mmap` / `munmap`.
 
 ## Getting started
 
@@ -44,9 +51,9 @@ void verify() {} // Used for heap verification
 
 ## Allocate memory
 
-For this mmap allocator, if `my_malloc` is called to allocate $N$ bytes, we directly call `mmap` to allocate a chunk with size _no less than_ $N$ bytes. Each `mmap`-ed chunk has a piece of metadata memory for us to record the size of the chunk. So later when we call `munmap`, we will always know the size of the `mmap`-ed chunk.
+For this mmap allocator, if `my_malloc` is called to allocate $N$ bytes, we directly call `mmap` to allocate a chunk with size _no less than_ $N$ bytes. Each `mmap`-ed chunk has a piece of metadata memory for us to record the size of the chunk. So later when we call `munmap`, we will always know the size of the `mmap`-ed chunk. Why is this metadata important? Discuss amongst yourselves what would happen if this metadata is omitted.
 
-We first define the `Chunk` data structure, and set an appropriate max allocation size we're going to support, say, 16MB.
+We first define the `Chunk` data structure, and set an appropriate max allocation size we're going to support, say, 16 MB.
 
 Then, we delegate the allocation to `mmap`:
 
@@ -78,10 +85,14 @@ Then, we delegate the allocation to `mmap`:
   }
 ```
 
+**Note:** As you have learnt previously, `mmap` can fail! What should you return in the case when `mmap` fails to allocate more memory? How can we inform a calling function that we're out of memory? ***NOTE: CHECK IF STUDENTS KNOW `errorno`***.
+
 
 ## Metadata reservation and mmap size
 
-Note that (1) The chunk metadata requires extra space in addition to the allocation size. (2) The size passed to `mmap` must be a multiple of page size (4096 bytes). Our `my_malloc` implementation is not fully correct yet.
+Note that:
+ 1. The chunk metadata requires extra space in addition to the allocation size.
+ 2. The size passed to `mmap` must be a multiple of page size (4096 bytes). Our `my_malloc` implementation is not fully correct yet.
 
 To solve these issues, we first add the allocation size by the chunk metadata size, and then round it up to a multiple of page size.
 
@@ -129,7 +140,7 @@ For `my_free`, we first get the `Chunk*` pointer by subtracting the data pointer
 
 There're a few corner cases that need to resolve for completeness:
 
-* For alloaction with zero size or greater than the `max_allocation_size()`, `my_malloc` should return `NULL`.
+* For allocation with zero size or greater than the `max_allocation_size()`, `my_malloc` should return `NULL`.
 * Free a `NULL` pointer is a no-op.
 
 ```diff
@@ -212,6 +223,10 @@ $ ./test.py
 * Enable logging:  `./test.py --log`.
   * Please use `LOG("Hello %s\n", "world");` for logging in your source code.
 * If your source file is called *different_malloc.c* instead of _mymalloc.c_: `./test.py -m different_malloc`.
+
+### Failing tests
+
+You may have noticed that a few tests fail with your mmap allocator. This is deliberate and in fact a major limitation of the naïve mmap allocator. Allocating 4096 bytes if you only need 16 bytes is wasteful! We can quickly run out of memory if we allocate a few objects. The failing tests in fact simulate a low memory system and fail if too much memory has been allocated. Discuss amongst yourselves on what other limitations does the mmap allocator have (_hint: think about the performance!_).
 
 # 2. Simple freelist allocator
 
