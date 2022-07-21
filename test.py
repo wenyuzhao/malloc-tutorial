@@ -86,9 +86,10 @@ def run_test(test: str, script_path: Path) -> tuple[bytes, SubprocessExit]:
             )
         return p.stdout, SubprocessExit.Normal
     except subprocess.CalledProcessError as e:
-        signo = bytearray(e.stdout)
-        signo.extend(bytes(f"{signal.strsignal(-e.returncode)}", "UTF-8"))
-        e.stdout = bytes(signo)
+        if -e.returncode in signal.valid_signals():
+            exit_signal = bytearray(e.stdout)
+            exit_signal.extend(bytes(f"{signal.strsignal(-e.returncode)}", "UTF-8"))
+            e.stdout = bytes(exit_signal)
         return e.stdout, SubprocessExit.Error
     except subprocess.TimeoutExpired as e:
         out = f"Timed out after {TIMEOUT}s"
