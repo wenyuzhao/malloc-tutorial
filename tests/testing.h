@@ -29,14 +29,12 @@ static inline void **mallocing_loop(void **array, size_t size, size_t count)
         if (array != NULL)
             array[i] = v;
     }
-    verify();
     return array;
 }
 
 static inline void *mallocing(size_t size)
 {
     void *ptr = my_malloc(size);
-    verify();
     return ptr;
 }
 
@@ -46,11 +44,9 @@ static inline void freeing_loop(void **array, size_t count)
     {
         my_free(array[i]);
     }
-    verify();
 }
 
 static inline void freeing(void *ptr)
 {
     my_free(ptr);
-    verify();
 }

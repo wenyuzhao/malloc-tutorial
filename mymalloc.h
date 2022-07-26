@@ -18,4 +18,3 @@ extern const size_t kMaxAllocationSize;
 
 void *my_malloc(size_t size);
 void my_free(void *p);
-void verify();

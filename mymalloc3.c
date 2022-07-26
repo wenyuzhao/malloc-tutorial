@@ -256,27 +256,3 @@ void my_free(void *ptr)
   if (!is_fence(left) && left->free)
     coalesce_blocks(left, block);
 }
-
-void verify()
-{
-  for (int i = 0; i < N_LISTS + 1; i++)
-  {
-    Block *free_head = lists[i];
-    for (Block *b = free_head; b != NULL; b = b->next)
-    {
-      assert(!is_fence(b));
-      assert(b->free);
-      assert(b->size >= kBlockMetadataSize);
-      assert(b->left_size >= kMinAllocationSize);
-      b->free = false;
-    }
-    for (Block *b = free_head; b != NULL; b = b->next)
-    {
-      assert(!is_fence(b));
-      assert(!b->free);
-      assert(b->size >= kBlockMetadataSize);
-      assert(b->left_size >= kMinAllocationSize);
-      b->free = true;
-    }
-  }
-}

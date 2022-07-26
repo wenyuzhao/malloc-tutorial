@@ -1,3 +1,4 @@
+align
 all_lists
 coalesce_chunk_coalesce
 coalesce_chunk_insert
@@ -18,6 +19,7 @@ malloc_too_large
 malloc_zero
 multi_chunks
 multi_malloc
+oom0
 random
 random_sizes
 simple0

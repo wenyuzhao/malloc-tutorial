@@ -201,21 +201,3 @@ void my_free(void *ptr)
     }
   }
 }
-
-void verify()
-{
-  for (Block *b = free_head; b != NULL; b = b->next)
-  {
-    assert(!is_fence(b));
-    assert(b->free);
-    assert(b->size >= kBlockMetadataSize);
-    b->free = false;
-  }
-  for (Block *b = free_head; b != NULL; b = b->next)
-  {
-    assert(!is_fence(b));
-    assert(!b->free);
-    assert(b->size >= kBlockMetadataSize);
-    b->free = true;
-  }
-}

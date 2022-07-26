@@ -47,5 +47,3 @@ void my_free(void *ptr) {
   // Unmap memory
   munmap(chunk, chunk->size);
 }
-
-void verify() {} // Used for heap verification
