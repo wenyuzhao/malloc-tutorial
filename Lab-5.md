@@ -291,6 +291,8 @@ The only block metadata we need to maintain is the free/used flag and the block 
   const size_t kChunkSize = 16ull << 20; // 16MB mmap chunk
   const size_t kMemorySize = kChunkSize << 2; // 64MB mmap chunk
   const size_t kMaxAllocationSize = kChunkSize - kBlockMetadataSize;
++
++ static const size_t kMinAllocationSize = 1;
 
   static Block *start = NULL;
 
@@ -386,6 +388,8 @@ To release a memory block, we get the block start address from the given pointer
   const size_t kMemorySize = kChunkSize << 2; // 64MB mmap chunk
   const size_t kMaxAllocationSize = kChunkSize - kBlockMetadataSize;
 
+  static const size_t kMinAllocationSize = 1;
+
   static Block *start = NULL;
 
   /// Get right neighbour
@@ -471,6 +475,120 @@ To release a memory block, we get the block start address from the given pointer
 ## Testing and debugging using GDB
 
 If you run all the tests now using `./test.py`, you'll see one test (_align_) failing. Let's use that as an example showing how to use GDB to C programs. Please do this section on Linux instead of macOS.
+
+First let's launch the faulty program using GDB:
+
+```console
+$ gdb ./tests/align
+GNU gdb (GDB) Fedora 11.2-2.fc35
+Copyright (C) 2022 Free Software Foundation, Inc.
+License GPLv3+: GNU GPL version 3 or later <http://gnu.org/licenses/gpl.html>
+This is free software: you are free to change and redistribute it.
+There is NO WARRANTY, to the extent permitted by law.
+Type "show copying" and "show warranty" for details.
+This GDB was configured as "x86_64-redhat-linux-gnu".
+Type "show configuration" for configuration details.
+For bug reporting instructions, please see:
+<https://www.gnu.org/software/gdb/bugs/>.
+Find the GDB manual and other documentation resources online at:
+    <http://www.gnu.org/software/gdb/documentation/>.
+
+For help, type "help".
+Type "apropos word" to search for commands related to "word"...
+Reading symbols from ./tests/align...
+(gdb)
+```
+
+Type `run` to run the program:
+
+```
+(gdb) run
+Starting program: /home/wenyu/malloc-tutorial/tests/align
+[Thread debugging using libthread_db enabled]
+Using host libthread_db library "/lib64/libthread_db.so.1".
+align: tests/align.c:12: int main(): Assertion `is_word_aligned(ptr)' failed.
+
+Program received signal SIGABRT, Aborted.
+__pthread_kill_implementation (threadid=<optimized out>, signo=signo@entry=6, no_tid=no_tid@entry=0) at pthread_kill.c:44
+44            return INTERNAL_SYSCALL_ERROR_P (ret) ? INTERNAL_SYSCALL_ERRNO (ret) : 0;
+(gdb)
+```
+
+We see that it failed with a message "align: tests/align.c:12: int main(): Assertion 'is_word_aligned(ptr)' failed.". Check _tests/align.c_ line 12, we can see that the first allocation `void *ptr = mallocing(1);` may not return a word-aligned address.
+
+Let's use gdb to dump the value of this `ptr` variable. First, type `backtrace` to display the stack trace:
+
+```console
+(gdb) backtrace
+#0  __pthread_kill_implementation (threadid=<optimized out>, signo=signo@entry=6, no_tid=no_tid@entry=0) at pthread_kill.c:44
+#1  0x00007ffff7e41b53 in __pthread_kill_internal (signo=6, threadid=<optimized out>) at pthread_kill.c:78
+#2  0x00007ffff7df52a6 in __GI_raise (sig=sig@entry=6) at ../sysdeps/posix/raise.c:26
+#3  0x00007ffff7dc87f3 in __GI_abort () at abort.c:79
+#4  0x00007ffff7dc871b in __assert_fail_base (fmt=<optimized out>, assertion=<optimized out>, file=<optimized out>, line=<optimized out>, function=<optimized out>) at assert.c:92
+#5  0x00007ffff7dee1f6 in __GI___assert_fail (assertion=0x402010 "is_word_aligned(ptr)", file=0x402025 "tests/align.c", line=12, function=0x402033 "int main()") at assert.c:101
+#6  0x00000000004011b7 in main () at tests/align.c:12
+```
+
+The stack frame #6 is the main function we're caring about, and also contains the value of `ptr`.
+
+Let's select the frame #6 (by running `select-frame 6`) and dump variables using `info locals`:
+
+```console
+(gdb) info locals
+ptr = 0x7ffff7d9cfff
+ptr2 = 0x9e00000006
+```
+
+Since the program crashes at line 12, before `ptr2` is not filled. So the `ptr2` value here is meaningless.
+
+But we can see that the first allocation, `ptr = 0x7ffff7d9cfff`, is not word-aligned. Since this is the first allocation, so it should be relatively easy to debug. Let's use GDB to inspect the implicit free-list. We store the start address of the first block as a global variable `start`. So we simply dump this variable:
+
+```console
+(gdb) print start
+$1 = (Block *) 0x7ffff3d9d000
+(gdb) print *start
+$2 = {free = true, size = 67108847}
+```
+
+From the above dump we can see that after splitting the 64 MB (67108864 B) block, the first block has size 67108847 B. So the size of the second block should be `67108864 B - 67108847 B = 17 B`, which is exactly the metadata size (16 B) + the allocation request (1 B).
+
+We can also easilty varify that our `split` function is correct: The second block address is `start + first_block_size = 0x7ffff3d9d000 + 67108847 = 0x7ffff7d9cfef`, plus the 16 B metadata size, the value is `0x7ffff7d9cfff`, which is equal to `ptr`.
+
+At this point you may realize that the problem is because that the allocation size is too small (only 1 B). If we make a block only `17 B`, the address of the neighbour blocks cannot be aligned proerly, and eventually results in unaligned allocation result.
+
+So the solution is to round up the allocation size to a multiple of word size. Since the metadata size is also a multiple of word size, we can guarantee that every block in the heap is word-aligned.
+
+```diff
+...
+  const size_t kMaxAllocationSize = kChunkSize - kBlockMetadataSize;
+
++ static const size_t kAlignment = sizeof(size_t); // Word alignment
+- static const size_t kMinAllocationSize = 1;
++ static const size_t kMinAllocationSize = kAlignment;
+
+...
+
+    return (Block*) ptr;
+  }
+
++ /// Round up size
++ inline static size_t round_up(size_t size, size_t alignment) {
++   const size_t mask = alignment - 1;
++   return (size + mask) & ~mask;
++ }
+
+  /// Get data pointer of a block
+  inline static void *block_to_data(Block *block) {
+
+...
+
+
+  void *my_malloc(size_t size) {
++   // Round up allocation size
++   size = round_up(size, kAlignment);
+    if (size == 0 || size > kMaxAllocationSize) return NULL;
+
+```
 
 ## Put all together
 

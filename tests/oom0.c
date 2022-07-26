@@ -7,7 +7,7 @@
 
 int main()
 {
-    set_mem_limit(8192 /* bytes */);
+    set_mem_limit((16ull << 20) << 4 /* bytes */);
 
     int *ptr = my_malloc(sizeof(int *));
     CHECK_NULL(ptr);

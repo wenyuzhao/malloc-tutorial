@@ -1,4 +1,4 @@
-
+// mymalloc.c
 #include <assert.h>
 #include <stdbool.h>
 #include <sys/mman.h>
@@ -68,7 +68,7 @@ static Block *split(Block *block, size_t size) {
 
 void *my_malloc(size_t size) {
   // Round up allocation size
-  // size = round_up(size, kAlignment);
+  size = round_up(size, kAlignment);
   if (size == 0 || size > kMaxAllocationSize) return NULL;
   // Initial allocation?
   if (start == NULL) {
