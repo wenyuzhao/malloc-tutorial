@@ -1,4 +1,8 @@
 #include <assert.h>
+#include <errno.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 #include <sys/mman.h>
 #include "mymalloc.h"
 
@@ -45,5 +49,9 @@ void my_free(void *ptr) {
   // Get chunk
   Chunk *chunk = get_chunk(ptr);
   // Unmap memory
-  munmap(chunk, chunk->size);
+  int retval = munmap(chunk, chunk->size);
+  if (retval != 0) {
+     fprintf(stderr, "my_free: %s\n", strerror(errno));
+     abort();
+  }
 }
