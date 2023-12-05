@@ -2,6 +2,8 @@
 
 # Run tests:
 
+NOTE: please use test.py instead
+
 ```
 make test MALLOC=mymalloc
 ```
