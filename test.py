@@ -113,17 +113,31 @@ def check_test(test: str, output: bytes, exit_code: SubprocessExit, path: Path):
     global TOTAL_RUNS, TOTAL_FAILS, TOTAL_TIMEOUTS
 
     TOTAL_RUNS += 1
-    if exit_code == SubprocessExit.Normal:
-        output = output.decode("UTF-8")
-        print(f"{bcolors.OKGREEN}OK{bcolors.ENDC}", flush=True)
-    elif exit_code == SubprocessExit.Error:
-        TOTAL_FAILS += 1
-        print(f"{bcolors.FAIL}FAIL{bcolors.ENDC}", flush=True)
-        FAILED.append({ "test": test, "output": output.decode("UTF-8"), "exit_code": exit_code })
+
+    if "expect" in str(test) and exit_code != SubprocessExit.Timeout:
+        test_name = get_test_name(test)
+        exp_file = test_name + "ed"
+        with open(path / "tests" / "expect" / exp_file, "r") as f:
+            expected = bytes(bytearray("".join(line for line in f), "UTF-8"))
+            if expected == output:
+                print(f"{bcolors.OKGREEN}OK{bcolors.ENDC}", flush=True)
+            else:
+                TOTAL_FAILS += 1
+                print(f"{bcolors.FAIL}FAIL{bcolors.ENDC}", flush=True)
+                out = format(f"Expected:\n{bcolors.BOLD}{expected.decode('UTF-8')}{bcolors.ENDC}\n"  \
+                        f"Actual:\n{output.decode('UTF-8')}")
+                FAILED.append({ "test": test, "output": out, "exit_code": exit_code })
     else:
-        TOTAL_TIMEOUTS += 1
-        print(f"{bcolors.WARNING}TIMEOUT{bcolors.ENDC}", flush=True)
-        FAILED.append({ "test": test, "output": output.decode("UTF-8"), "exit_code": exit_code })
+        if exit_code == SubprocessExit.Normal:
+            print(f"{bcolors.OKGREEN}OK{bcolors.ENDC}", flush=True)
+        elif exit_code == SubprocessExit.Error:
+            TOTAL_FAILS += 1
+            print(f"{bcolors.FAIL}FAIL{bcolors.ENDC}", flush=True)
+            FAILED.append({ "test": test, "output": output.decode("UTF-8"), "exit_code": exit_code })
+        else:
+            TOTAL_TIMEOUTS += 1
+            print(f"{bcolors.WARNING}TIMEOUT{bcolors.ENDC}", flush=True)
+            FAILED.append({ "test": test, "output": output.decode("UTF-8"), "exit_code": exit_code })
 
 
 def main():
@@ -137,7 +151,7 @@ def main():
     output, exit_code = make("clean", script_path)
     check_make("clean", output, exit_code)
 
-    build_cmd = f"MALLOC={args.malloc}" if args.malloc is not None else ""
+    build_cmd = f"MALLOC={args.malloc} " if args.malloc is not None else ""
     if args.release:
         build_cmd += "RELEASE=1 "
     if args.log:
@@ -152,7 +166,7 @@ def main():
 
         test_path = script_path / "tests" / args.test
         output, exit_code = run_test(test_path, script_path)
-        check_test(test_path, output, exit_code, script_path / "tests")
+        check_test(test_path, output, exit_code, script_path)
     else:
         output, exit_code = make("test " + build_cmd, script_path)
         check_make("test", output, exit_code)
